@@ -156,11 +156,18 @@ class Container extends BaseContainer {
 
 
 			// Services.
-			Services\Domain::class                    => null,
-			Services\Logger::class                    => null,
+			Services\Domain::class                      => null,
+			Services\Goals::class                       => null,
+			Services\Logger::class                      => null,
+			Services\Kadence\Templates\ApiClient::class => null,
 
 			// Wizards.
-			Wizards\FirstTimeConfiguration::class     => null,
+			Wizards\FirstTimeConfiguration::class     => static function ( $app ) {
+				return new Wizards\FirstTimeConfiguration(
+					$app->make( Services\Kadence\Templates\ApiClient::class ),
+					$app->make( Services\Goals::class )
+				);
+			},
 			Wizards\GoLive::class                     => static function ( $app ) {
 				return new Wizards\GoLive(
 					$app->make( Contracts\ManagesDomain::class )

@@ -3,19 +3,12 @@
 namespace Tribe\WME\Sitebuilder\Wizards;
 
 use Tribe\WME\Sitebuilder\Concerns\StoresData;
+use Tribe\WME\Sitebuilder\Services\Goals;
+use Tribe\WME\Sitebuilder\Services\Kadence\Templates\ApiClient;
 
 class FirstTimeConfiguration extends Wizard {
 
 	use StoresData;
-
-	const GOALS_BUSINESS      = 'business';
-	const GOALS_PROJECT       = 'project';
-	const GOALS_PORTFOLIO     = 'portfolio';
-	const GOALS_ECOMMERCE     = 'eCommerce';
-	const GOALS_BLOG          = 'blog';
-	const GOALS_CAREERS       = 'careers';
-	const GOALS_SERVICES      = 'services';
-	const GOALS_PRICING_PLANS = 'pricingPlans';
 
 	const FIELD_LOGO             = 'logo';
 	const FIELD_PASSWORD         = 'password';
@@ -58,9 +51,22 @@ class FirstTimeConfiguration extends Wizard {
 	public $errors = [];
 
 	/**
+	 * @var ApiClient
+	 */
+	protected $api_client;
+
+	/**
+	 * @var Goals
+	 */
+	protected $goals;
+
+	/**
 	 * Construct.
 	 */
-	public function __construct() {
+	public function __construct(ApiClient $api_client, Goals $goals) {
+		$this->api_client = $api_client;
+		$this->goals = $goals;
+
 		parent::__construct();
 
 		$this->add_ajax_action( 'wizard_started', [ $this, 'telemetryWizardStarted' ] );
@@ -99,7 +105,7 @@ class FirstTimeConfiguration extends Wizard {
 			'autoLaunch'   => false,
 			'canBeClosed'  => $this->isComplete(),
 			'adminUrl'     => admin_url(),
-			'goal_choices' => $this->getGoalsChoices(),
+			'goal_choices' => $this->goals->getChoices(),
 			'site'         => [
 				'siteName'        => $this->getSitename(),
 				'tagline'         => $this->getTagline(),
@@ -186,7 +192,7 @@ class FirstTimeConfiguration extends Wizard {
 
 		$this->getData()->set( 'complete', true )->save();
 
-		do_action( 'wme_event_wizard_ftc_completed', $this );
+		do_action( 'wme_event_wizard_ftc_completed' );
 		do_action( 'wme_event_wizard_completed', 'ftc' );
 
 		$this->setUserCredentials();
@@ -201,98 +207,6 @@ class FirstTimeConfiguration extends Wizard {
 	 */
 	public function isComplete() {
 		return (bool) $this->getData()->get( 'complete', false );
-	}
-
-	/**
-	 * Get the goal choices.
-	 *
-	 * @return array
-	 */
-	public function getGoalsChoices() {
-		$goals = [
-			[
-				'key'         => self::GOALS_BUSINESS,
-				'value'       => __( 'Create a home for myself, my business or organization online', 'wme-sitebuilder' ),
-				'description' => __( 'A web presence that shares information about my services, and expertise and helps customers find and get in contact with me.', 'wme-sitebuilder' ),
-				'icon'        => 'WebAsset',
-				'requiredPages' => [
-					'home' => [
-						'title' => __( 'Home', 'wme-sitebuilder' ),
-					],
-					'about' => [
-						'title' => __( 'About', 'wme-sitebuilder' ),
-					],
-					'contact' => [
-						'title' => __( 'Contact', 'wme-sitebuilder' ),
-					],
-				],
-				'requiredPlugins' => [],
-			],
-			[
-				'key'         => self::GOALS_ECOMMERCE,
-				'value'       => __( 'Sell physical or digital goods online', 'wme-sitebuilder' ),
-				'description' => __( 'An ecommerce store to accept payment and manage customers.', 'wme-sitebuilder' ),
-				'icon'        => 'ShoppingCart',
-				'requiredPages' => [
-					'shop' => [
-						'title' => __( 'Shop', 'wme-sitebuilder' ),
-					]
-				],
-				'requiredPlugins' => [
-					'woocommerce',
-				],
-			],
-			[
-				'key'         => self::GOALS_BLOG,
-				'value'       => __( 'Share news or write blogs', 'wme-sitebuilder' ),
-				'description' => __( 'Posting content is the primary goal of my organization or a core component of my website.', 'wme-sitebuilder' ),
-				'icon'        => 'Article',
-				'requiredPages' => [
-					'news' => [
-						'title' => __( 'News', 'wme-sitebuilder' ),
-					],
-				],
-				'requiredPlugins' => [],
-			],
-			[
-				'key'         => self::GOALS_CAREERS,
-				'value'       => __( 'Share open positions to potential candidates', 'wme-sitebuilder' ),
-				'description' => '',
-				'icon'        => 'SupervisorAccount',
-				'requiredPages' => [
-					'careers' => [
-						'title' => __( 'Careers', 'wme-sitebuilder' ),
-					],
-				],
-				'requiredPlugins' => [],
-			],
-			[
-				'key'         => self::GOALS_SERVICES,
-				'value'       => __( 'Promote my services', 'wme-sitebuilder' ),
-				'description' => '',
-				'icon'        => 'ChatBubble',
-				'requiredPages' => [
-					'services' => [
-						'title' => __( 'Services', 'wme-sitebuilder' ),
-					],
-				],
-				'requiredPlugins' => [],
-			],
-			[
-				'key'         => self::GOALS_PRICING_PLANS,
-				'value'       => __( 'Share my pricing plans', 'wme-sitebuilder' ),
-				'description' => __( 'A place to showcase each plan, with their benefits and prices.', 'wme-sitebuilder' ),
-				'icon'        => 'PriceChange',
-				'requiredPages' => [
-					'plans' => [
-						'title' => __( 'Plans (Pricing)', 'wme-sitebuilder' ),
-					],
-				],
-				'requiredPlugins' => [],
-			],
-		];
-
-		return apply_filters( 'wme_sitebuilder_ftc_wizard_goals', $goals );
 	}
 
 	/**
@@ -792,7 +706,8 @@ class FirstTimeConfiguration extends Wizard {
 			return;
 		}
 
-		$goalChoices = $this->getGoalsChoices();
+		$goalChoices = $this->goals->getChoices();
+		$page_templates = $this->api_client->fetch_page_patterns();
 
 		foreach ( $goals as $selected ) {
 			$goal = array_filter( $goalChoices, function ( $choice ) use ( $selected ) {
@@ -810,6 +725,10 @@ class FirstTimeConfiguration extends Wizard {
 			}
 
 			foreach ( $goal['requiredPages'] as $slug => $args ) {
+				if ( ! empty( $page_templates[ $slug ] ) ) {
+					$key = array_rand( $page_templates[ $slug ]);
+					$args['content'] = implode( PHP_EOL, array_filter( wp_list_pluck($page_templates[ $slug ][$key]['rows'], 'pattern_content') ) );
+				}
 				$this->createPage( $slug, $args );
 			}
 		}
@@ -833,9 +752,14 @@ class FirstTimeConfiguration extends Wizard {
 			'post_name'    => $slug,
 			'post_type'    => 'page',
 			'post_status'  => 'publish',
-			'post_content' => '',
+			'post_content' => $args['content'],
 		];
 
-		wp_insert_post( $page );
+		$page_id = wp_insert_post( $page );
+
+		if ( 'home' === $slug ) {
+			update_option( 'show_on_front', 'page' );
+			update_option( 'page_on_front', (int) $page_id );
+		}
 	}
 }
